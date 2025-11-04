@@ -193,15 +193,15 @@ def auth_callback():
 
 @app.post("/login_local")
 def login_local():
-    email = (request.form.get("email") or request.json.get("email") if request.is_json else "").strip().lower()
-    password = (request.form.get("password") or request.json.get("password") if request.is_json else "")
+    email = (request.form.get("email") or "").strip().lower()
+    password = request.form.get("password") or ""
     if not email or not password:
-        return redirect(url_for("index"))
+        return render_template("index.html", login_error="Email and password required")
     db = SessionLocal()
     try:
         user = db.query(User).filter_by(email=email).first()
         if not user or not user.password_hash or not check_password_hash(user.password_hash, password):
-            return render_template("index.html", login_error="Invalid credentials"), 401
+            return render_template("index.html", login_error="Invalid credentials")
         login_user(user)
         return redirect(url_for("dashboard"))
     finally:
@@ -210,16 +210,16 @@ def login_local():
 
 @app.post("/register_local")
 def register_local():
-    email = (request.form.get("email") or request.json.get("email") if request.is_json else "").strip().lower()
-    password = (request.form.get("password") or request.json.get("password") if request.is_json else "")
-    name = (request.form.get("name") or request.json.get("name") if request.is_json else None)
+    email = (request.form.get("email") or "").strip().lower()
+    password = request.form.get("password") or ""
+    name = request.form.get("name") or None
     if not email or not password:
-        return render_template("index.html", register_error="Email and password required"), 400
+        return render_template("index.html", register_error="Email and password required")
     db = SessionLocal()
     try:
         existing = db.query(User).filter_by(email=email).first()
         if existing and existing.password_hash:
-            return render_template("index.html", register_error="Email already registered"), 400
+            return render_template("index.html", register_error="Email already registered")
         if existing and not existing.password_hash:
             existing.password_hash = generate_password_hash(password)
             db.commit()
@@ -232,6 +232,9 @@ def register_local():
         db.commit()
         login_user(user)
         return redirect(url_for("dashboard"))
+    except Exception as e:
+        db.rollback()
+        return render_template("index.html", register_error=f"Registration failed: {str(e)}")
     finally:
         db.close()
 
@@ -255,7 +258,20 @@ def dashboard():
             .limit(10)
             .all()
         )
-        return render_template("dashboard.html", user=user, logs=recent_logs)
+        # Calculate today's claims
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_claims = (
+            db.query(APILog)
+            .filter(
+                APILog.user_id == user.id,
+                APILog.endpoint == "/api/claim_credits_wall",
+                APILog.status == "success",
+                APILog.created_at >= today_start
+            )
+            .all()
+        )
+        today_total = sum(log.cost for log in today_claims)
+        return render_template("dashboard.html", user=user, logs=recent_logs, today_claimed=today_total, daily_limit=20)
     finally:
         db.close()
 
@@ -398,10 +414,29 @@ def docs():
     return render_template("docs.html")
 
 
+@app.get("/about")
+def about():
+    return render_template("about.html")
+
+
 @app.get("/verify-wall")
 @login_required
 def verify_wall():
-    return render_template("verify_wall.html")
+    # Require a valid one-time token from recent captcha verification
+    token = session.get("verify_token")
+    token_ts = session.get("verify_token_ts")
+    if not token or not token_ts:
+        return redirect(url_for("dashboard"))
+    try:
+        t = datetime.fromisoformat(token_ts)
+        # Token valid for 5 minutes only
+        if (datetime.utcnow() - t).total_seconds() > 300:
+            session.pop("verify_token", None)
+            session.pop("verify_token_ts", None)
+            return redirect(url_for("dashboard"))
+    except Exception:
+        return redirect(url_for("dashboard"))
+    return render_template("verify_wall.html", verify_token=token)
 
 
 @app.post("/api/claim_credits_wall")
@@ -409,12 +444,81 @@ def verify_wall():
 def claim_credits_wall():
     db = SessionLocal()
     try:
+        # Require and consume the one-time token
+        data = request.get_json(silent=True) or {}
+        provided_token = data.get("token")
+        stored_token = session.pop("verify_token", None)
+        token_ts = session.pop("verify_token_ts", None)
+        
+        # Validate token exists and matches
+        if not stored_token or not provided_token or stored_token != provided_token:
+            return jsonify({"ok": False, "error": "invalid_token"}), 400
+        
+        # Validate token is recent (within 5 minutes)
+        if not token_ts:
+            return jsonify({"ok": False, "error": "token_expired"}), 400
+        try:
+            t = datetime.fromisoformat(token_ts)
+            if (datetime.utcnow() - t).total_seconds() > 300:
+                return jsonify({"ok": False, "error": "token_expired"}), 400
+        except Exception:
+            return jsonify({"ok": False, "error": "token_expired"}), 400
+        
+        # Check daily claim limit (20 credits per day)
         user = db.get(User, current_user.id)
+        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_claims = (
+            db.query(APILog)
+            .filter(
+                APILog.user_id == user.id,
+                APILog.endpoint == "/api/claim_credits_wall",
+                APILog.status == "success",
+                APILog.created_at >= today_start
+            )
+            .all()
+        )
+        today_total = sum(log.cost for log in today_claims)
+        if today_total >= 20:
+            return jsonify({"ok": False, "error": "daily_limit_reached", "limit": 20, "claimed": today_total}), 429
+        
+        # Token is valid - award credits (one-time use, already consumed via pop above)
         user.credits += 3
         db.commit()
-        return jsonify({"ok": True, "credits": user.credits, "added": 3})
+        # Log the claim
+        log_api_usage(db, user.id, "/api/claim_credits_wall", 3, "success", None)
+        return jsonify({"ok": True, "credits": user.credits, "added": 3, "daily_claimed": today_total + 3, "daily_limit": 20})
     finally:
         db.close()
+
+
+@app.post("/api/recaptcha_start")
+@login_required
+def recaptcha_start():
+    data = request.get_json(silent=True) or {}
+    recaptcha_token = data.get("recaptcha")
+    secret = os.getenv("RECAPTCHA_SECRET", "")
+    if not recaptcha_token or not secret:
+        return jsonify({"ok": False, "error": "captcha_required"}), 400
+    try:
+        verify_resp = requests.post(
+            "https://www.google.com/recaptcha/api/siteverify",
+            data={
+                "secret": secret,
+                "response": recaptcha_token,
+                "remoteip": request.remote_addr or "",
+            },
+            timeout=8,
+        )
+        g = verify_resp.json()
+        if not g.get("success"):
+            return jsonify({"ok": False, "error": "captcha_failed"}), 400
+    except Exception:
+        return jsonify({"ok": False, "error": "captcha_verify_error"}), 400
+    # Generate unique one-time token for this verification
+    verify_token = secrets.token_hex(32)
+    session["verify_token"] = verify_token
+    session["verify_token_ts"] = datetime.utcnow().isoformat()
+    return jsonify({"ok": True, "token": verify_token})
 
 
 @app.get("/ads.txt")

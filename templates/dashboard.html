@@ -31,9 +31,19 @@
   <h3>Credits</h3>
   <div class="card">
     <div class="hint">Complete reCAPTCHA to continue. You'll be redirected to a verify page, then back home with +3 credits.</div>
+    <div class="hint" style="margin-bottom:8px;">
+      Daily claim: <strong>{{ today_claimed }}/{{ daily_limit }}</strong> credits today
+      {% if today_claimed >= daily_limit %}
+        <span style="color: var(--muted);">(Limit reached)</span>
+      {% endif %}
+    </div>
     <div style="margin:8px 0;">
-      <script src="https://www.google.com/recaptcha/api.js" async defer></script>
-      <div class="g-recaptcha" data-sitekey="{{ RECAPTCHA_SITE_KEY }}" data-callback="onRecaptchaSuccess"></div>
+      {% if today_claimed >= daily_limit %}
+        <div class="hint">Daily claim limit reached. Come back tomorrow!</div>
+      {% else %}
+        <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+        <div class="g-recaptcha" data-sitekey="{{ RECAPTCHA_SITE_KEY }}" data-callback="onRecaptchaSuccess"></div>
+      {% endif %}
     </div>
     <div id="creditStatus" class="hint"></div>
   </div>
@@ -91,9 +101,24 @@
 
     window.onRecaptchaSuccess = function(token) {
       recaptchaToken = token;
-      creditStatus.textContent = 'CAPTCHA verified. Redirecting…';
-      // Redirect to verify wall (awards credits after 5s and returns home)
-      window.location.href = '/verify-wall';
+      creditStatus.textContent = 'CAPTCHA verified. Preparing…';
+      // Tell server to record captcha success, then redirect to verify wall
+      fetch('/api/recaptcha_start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ recaptcha: recaptchaToken })
+      }).then(async (res) => {
+        if (res.ok) {
+          window.location.href = '/verify-wall';
+        } else {
+          const j = await res.json().catch(() => ({}));
+          creditStatus.textContent = 'Captcha check failed.' + (j.error ? ' ('+j.error+')' : '');
+          try { grecaptcha.reset(); recaptchaToken = null; } catch(_){}
+        }
+      }).catch(() => {
+        creditStatus.textContent = 'Network error.';
+      });
     };
   </script>
 {% endblock %}
