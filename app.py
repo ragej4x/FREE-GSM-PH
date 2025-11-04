@@ -2,7 +2,7 @@ import os
 import secrets
 from datetime import datetime
 
-from flask import Flask, redirect, render_template, request, session, url_for, jsonify, abort
+from flask import Flask, redirect, render_template, request, session, url_for, jsonify, abort, send_from_directory
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship, scoped_session
@@ -415,6 +415,11 @@ def claim_credits_wall():
         return jsonify({"ok": True, "credits": user.credits, "added": 3})
     finally:
         db.close()
+
+
+@app.get("/ads.txt")
+def serve_ads_txt():
+    return send_from_directory(os.path.join(app.root_path, "static"), "ads.txt", mimetype="text/plain")
 
 @app.post("/api/claim_credits")
 @login_required
