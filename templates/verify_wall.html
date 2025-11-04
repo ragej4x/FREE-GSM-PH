@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="card" style="text-align:center; padding:32px;">
+    <h2>Verifying…</h2>
+    <p class="hint">Please wait <span id="count">5</span>s while we verify your request.</p>
+    <div style="margin:16px 0;">
+      <ins class="adsbygoogle"
+           style="display:block"
+           data-ad-client="ca-pub-6120309864804101"
+           data-ad-slot="1234567890"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+      <script>(adsbygoogle=window.adsbygoogle||[]).push({});</script>
+    </div>
+  </div>
+
+  <script>
+    // Moving countdown + award credits, then redirect
+    let remaining = 5;
+    const el = document.getElementById('count');
+    const tick = setInterval(() => {
+      remaining -= 1;
+      if (el) el.textContent = String(remaining);
+      if (remaining <= 0) {
+        clearInterval(tick);
+        (async () => {
+          try { await fetch('/api/claim_credits_wall', { method: 'POST', credentials: 'same-origin' }); } catch(_) {}
+          window.location.href = '/';
+        })();
+      }
+    }, 1000);
+  </script>
+{% endblock %}
+
+

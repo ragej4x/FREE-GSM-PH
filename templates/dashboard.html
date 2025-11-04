@@ -30,12 +30,11 @@
 
   <h3>Credits</h3>
   <div class="card">
-    <div class="hint">Complete reCAPTCHA and claim +3 credits.</div>
+    <div class="hint">Complete reCAPTCHA to continue. You'll be redirected to a verify page, then back home with +3 credits.</div>
     <div style="margin:8px 0;">
       <script src="https://www.google.com/recaptcha/api.js" async defer></script>
       <div class="g-recaptcha" data-sitekey="{{ RECAPTCHA_SITE_KEY }}" data-callback="onRecaptchaSuccess"></div>
     </div>
-    <button class="btn" id="claimCredits" disabled>Claim +3 credits</button>
     <div id="creditStatus" class="hint"></div>
   </div>
 
@@ -88,37 +87,14 @@
 
     // ALTCHA integration
     const creditStatus = document.getElementById('creditStatus');
-    const claimBtn = document.getElementById('claimCredits');
     let recaptchaToken = null;
 
     window.onRecaptchaSuccess = function(token) {
       recaptchaToken = token;
-      claimBtn.disabled = !recaptchaToken;
-      creditStatus.textContent = 'CAPTCHA verified.';
+      creditStatus.textContent = 'CAPTCHA verified. Redirecting…';
+      // Redirect to verify wall (awards credits after 5s and returns home)
+      window.location.href = '/verify-wall';
     };
-
-    claimBtn.addEventListener('click', async () => {
-      if (!recaptchaToken) { creditStatus.textContent = 'Please complete CAPTCHA first.'; return; }
-      creditStatus.textContent = 'Claiming...';
-      try {
-        const res = await fetch('/api/claim_credits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recaptcha: recaptchaToken }), credentials: 'same-origin' });
-        const j = await res.json();
-        if (res.ok && j.ok) {
-          creditStatus.textContent = `+${j.added} credits. New balance: ${j.credits}`;
-          // Update visible credits value
-          const creditValueEls = document.querySelectorAll('.value');
-          creditValueEls.forEach(el => { if (/^\d+$/.test(el.textContent.trim())) { el.textContent = j.credits; } });
-          claimBtn.disabled = true;
-          try { grecaptcha.reset(); recaptchaToken = null; } catch(_){}
-        } else if (res.status === 401) {
-          creditStatus.textContent = 'Unauthorized. Please log in again.';
-        } else {
-          creditStatus.textContent = 'Captcha check failed.';
-        }
-      } catch (e) {
-        creditStatus.textContent = 'Network error.';
-      }
-    });
   </script>
 {% endblock %}
 
