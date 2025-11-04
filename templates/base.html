@@ -31,6 +31,16 @@
     </main>
 
     <footer class="footer">© {{ (now() if false) or '' }} FREE GSM PH</footer>
+    <script>
+      // Register service worker
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('{{ url_for("static", filename="sw.js") }}')
+            .then(reg => console.log('Service Worker registered:', reg))
+            .catch(err => console.log('Service Worker registration failed:', err));
+        });
+      }
+    </script>
   </body>
 </html>
 

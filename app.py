@@ -286,7 +286,9 @@ def admin():
         user = db.get(User, current_user.id)
         if not user.is_admin:
             abort(403)
-        return render_template("admin.html")
+        # Get all users
+        all_users = db.query(User).order_by(User.created_at.desc()).all()
+        return render_template("admin.html", users=all_users)
     finally:
         db.close()
 
@@ -302,13 +304,149 @@ def admin_credit():
         email = request.form.get("email", "").strip().lower()
         amount = int(request.form.get("amount", "0") or 0)
         if not email or amount == 0:
-            return render_template("admin.html", error="Email and amount required")
+            return render_template("admin.html", users=[], error="Email and amount required")
         user = db.query(User).filter_by(email=email).first()
         if not user:
-            return render_template("admin.html", error="User not found")
+            return render_template("admin.html", users=[], error="User not found")
         user.credits += amount
         db.commit()
-        return render_template("admin.html", success=f"Added {amount} credits to {email}")
+        all_users = db.query(User).order_by(User.created_at.desc()).all()
+        return render_template("admin.html", users=all_users, success=f"Added {amount} credits to {email}")
+    finally:
+        db.close()
+
+
+@app.get("/admin/user/<int:user_id>")
+@login_required
+def admin_user_details(user_id):
+    db = SessionLocal()
+    try:
+        admin_user = db.get(User, current_user.id)
+        if not admin_user.is_admin:
+            abort(403)
+        user = db.get(User, user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        # Get message history (SMS logs)
+        message_history = (
+            db.query(APILog)
+            .filter(APILog.user_id == user.id, APILog.endpoint == "/api/send_sms")
+            .order_by(APILog.created_at.desc())
+            .limit(50)
+            .all()
+        )
+        
+        return jsonify({
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "credits": user.credits,
+            "is_admin": user.is_admin,
+            "api_key": user.api_key,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "message_history": [
+                {
+                    "id": log.id,
+                    "created_at": log.created_at.isoformat() if log.created_at else None,
+                    "status": log.status,
+                    "cost": log.cost,
+                    "details": log.details,
+                }
+                for log in message_history
+            ]
+        })
+    finally:
+        db.close()
+
+
+@app.post("/admin/user/<int:user_id>/update")
+@login_required
+def admin_user_update(user_id):
+    db = SessionLocal()
+    try:
+        admin_user = db.get(User, current_user.id)
+        if not admin_user.is_admin:
+            abort(403)
+        user = db.get(User, user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        data = request.get_json(silent=True) or {}
+        if "email" in data:
+            new_email = data["email"].strip().lower()
+            if new_email and new_email != user.email:
+                existing = db.query(User).filter_by(email=new_email).first()
+                if existing and existing.id != user.id:
+                    return jsonify({"error": "Email already in use"}), 400
+                user.email = new_email
+        if "name" in data:
+            user.name = data["name"] or None
+        
+        db.commit()
+        return jsonify({"ok": True, "message": "User updated successfully"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.post("/admin/user/<int:user_id>/credits")
+@login_required
+def admin_user_credits(user_id):
+    db = SessionLocal()
+    try:
+        admin_user = db.get(User, current_user.id)
+        if not admin_user.is_admin:
+            abort(403)
+        user = db.get(User, user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        data = request.get_json(silent=True) or {}
+        action = data.get("action")  # "add" or "set"
+        amount = int(data.get("amount", 0))
+        
+        if action == "add":
+            user.credits += amount
+        elif action == "set":
+            user.credits = max(0, amount)
+        else:
+            return jsonify({"error": "Invalid action. Use 'add' or 'set'"}), 400
+        
+        db.commit()
+        return jsonify({"ok": True, "credits": user.credits, "message": f"Credits updated to {user.credits}"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        db.close()
+
+
+@app.post("/admin/user/<int:user_id>/delete")
+@login_required
+def admin_user_delete(user_id):
+    db = SessionLocal()
+    try:
+        admin_user = db.get(User, current_user.id)
+        if not admin_user.is_admin:
+            abort(403)
+        
+        if user_id == current_user.id:
+            return jsonify({"error": "Cannot delete yourself"}), 400
+        
+        user = db.get(User, user_id)
+        if not user:
+            return jsonify({"error": "User not found"}), 404
+        
+        email = user.email
+        db.delete(user)
+        db.commit()
+        return jsonify({"ok": True, "message": f"User {email} deleted successfully"})
+    except Exception as e:
+        db.rollback()
+        return jsonify({"error": str(e)}), 500
     finally:
         db.close()
 
