@@ -29,8 +29,13 @@ THEME = {
 }
 
 
-# Database setup: force local SQLite only (no remote Postgres/Supabase)
-DATABASE_URL = "sqlite:///app.db"
+# Database setup: prefer DATABASE_URL (e.g., Supabase Postgres), fallback to local SQLite
+db_url_env = os.getenv("DATABASE_URL", "").strip()
+if db_url_env:
+    DATABASE_URL = db_url_env
+else:
+    DATABASE_URL = "sqlite:///app.db"
+
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
