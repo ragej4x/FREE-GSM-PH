@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>Admin: Add Credits</h2>
+  {% if error %}<div class="alert bad">{{ error }}</div>{% endif %}
+  {% if success %}<div class="alert ok">{{ success }}</div>{% endif %}
+  <form class="card" method="post" action="/admin/credit">
+    <label>Email
+      <input name="email" type="email" placeholder="user@example.com" required />
+    </label>
+    <label>Amount
+      <input name="amount" type="number" min="1" value="10" required />
+    </label>
+    <button class="btn" type="submit">Add Credits</button>
+  </form>
+  <div class="hint">Only admins can access this page.</div>
+{% endblock %}
+
+

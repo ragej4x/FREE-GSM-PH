@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block content %}
+  <section class="hero">
+    <h1>Simple GSM API</h1>
+    <p>Use email/password or Google to sign in.</p>
+  </section>
+
+  <div class="card" style="display:flex; gap:16px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:260px;">
+      <h3>Login</h3>
+      {% if login_error %}<div class="alert bad">{{ login_error }}</div>{% endif %}
+      <form method="post" action="/login_local">
+        <label>Email
+          <input type="email" name="email" placeholder="you@example.com" required />
+        </label>
+        <label>Password
+          <input type="password" name="password" placeholder="••••••••" required />
+        </label>
+        <button class="btn" type="submit">Login</button>
+      </form>
+      <div style="margin-top:8px;">
+        <a class="btn" href="/login">Login with Google</a>
+      </div>
+    </div>
+
+    <div style="flex:1; min-width:260px;">
+      <h3>Register</h3>
+      {% if register_error %}<div class="alert bad">{{ register_error }}</div>{% endif %}
+      <form method="post" action="/register_local">
+        <label>Name (optional)
+          <input type="text" name="name" placeholder="Your name" />
+        </label>
+        <label>Email
+          <input type="email" name="email" placeholder="you@example.com" required />
+        </label>
+        <label>Password
+          <input type="password" name="password" placeholder="Create a password" required />
+        </label>
+        <button class="btn" type="submit">Create account</button>
+      </form>
+      <div style="margin-top:8px;">
+        <a class="btn" href="/login">Register with Google</a>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+

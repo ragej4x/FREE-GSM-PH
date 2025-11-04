@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or 'GSM API' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body style="--bg: {{ THEME.bg }}; --primary: {{ THEME.primary }}; --muted: {{ THEME.muted }};">
+    <header class="nav">
+      <a href="/" class="brand">FREE GSM PH</a>
+      <nav>
+        <a href="/docs">Docs</a>
+        {% if current_user.is_authenticated %}
+          <a href="/dashboard">Dashboard</a>
+          {% if current_user.is_authenticated and current_user.is_admin %}
+            <a href="/admin">Admin</a>
+          {% endif %}
+          <form action="/logout" method="post" style="display:inline">
+            <button class="btn small" type="submit">Logout</button>
+          </form>
+        {% else %}
+          <a class="btn" href="/login">Login with Google</a>
+        {% endif %}
+      </nav>
+    </header>
+
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">© {{ (now() if false) or '' }} FREE GSM PH</footer>
+  </body>
+</html>
+
+

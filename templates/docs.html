@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>API Docs</h2>
+  <div class="card">
+    <div class="label">Endpoint</div>
+    <div class="value mono">POST /api/send_sms</div>
+    <div class="label">Headers</div>
+    <div class="value mono">Content-Type: application/json</div>
+    <div class="value mono">X-API-Key: YOUR_API_KEY</div>
+    <div class="label">Body</div>
+    <pre class="mono" style="white-space: pre-wrap;">{
+  "number": "+639XXXXXXXXX",
+  "message": "Hello from API"
+}</pre>
+    <div class="hint">Authenticate with session (logged-in browser) or send your API key via <span class="mono">X-API-Key</span> header or <span class="mono">?api_key=...</span> query param.</div>
+  </div>
+
+  <h3>cURL</h3>
+  <pre class="mono card" style="white-space: pre-wrap;">curl -X POST http://localhost:5000/api/send_sms \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{"number":"+639XXXXXXXXX","message":"Hello from cURL"}'
+  </pre>
+
+  <h3>JavaScript (browser fetch)</h3>
+  <pre class="mono card" style="white-space: pre-wrap;">fetch('http://localhost:5000/api/send_sms', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-API-Key': 'YOUR_API_KEY'
+  },
+  body: JSON.stringify({ number: '+639XXXXXXXXX', message: 'Hello from JS' })
+}).then(r => r.json()).then(console.log).catch(console.error);
+  </pre>
+
+  <h3>Python (requests)</h3>
+  <pre class="mono card" style="white-space: pre-wrap;">import requests
+
+url = 'http://localhost:5000/api/send_sms'
+headers = {'Content-Type': 'application/json', 'X-API-Key': 'YOUR_API_KEY'}
+data = {'number': '+639XXXXXXXXX', 'message': 'Hello from Python'}
+r = requests.post(url, json=data, headers=headers)
+print(r.status_code, r.json())
+  </pre>
+
+  <h3>PHP (cURL)</h3>
+  <pre class="mono card" style="white-space: pre-wrap;"><?php
+$ch = curl_init('http://localhost:5000/api/send_sms');
+$payload = json_encode(['number' => '+639XXXXXXXXX', 'message' => 'Hello from PHP']);
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+  'Content-Type: application/json',
+  'X-API-Key: YOUR_API_KEY'
+]);
+curl_setopt($ch, CURLOPT_POST, true);
+curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+$res = curl_exec($ch);
+echo $res;
+?>
+  </pre>
+
+  <h3>Node.js (axios)</h3>
+  <pre class="mono card" style="white-space: pre-wrap;">const axios = require('axios');
+
+(async () => {
+  try {
+    const res = await axios.post('http://localhost:5000/api/send_sms',
+      { number: '+639XXXXXXXXX', message: 'Hello from Node' },
+      { headers: { 'X-API-Key': 'YOUR_API_KEY' } }
+    );
+    console.log(res.data);
+  } catch (e) {
+    console.error(e.response?.data || e.message);
+  }
+})();
+  </pre>
+
+  <div class="hint">Each SMS costs 1 credit. Top up credits in the Admin page.</div>
+{% endblock %}
+
+

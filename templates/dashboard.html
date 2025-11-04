@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h2>Dashboard</h2>
+  <div class="card">
+    <div>
+      <div class="label">Email</div>
+      <div class="value">{{ user.email }}</div>
+    </div>
+    <div>
+      <div class="label">Credits</div>
+      <div class="value">{{ user.credits }}</div>
+    </div>
+    <div>
+      <div class="label">API Key</div>
+      <div class="value mono">{{ user.api_key }}</div>
+    </div>
+  </div>
+
+  <h3>Send SMS</h3>
+  <form class="card" id="smsForm">
+    <label>Number
+      <input name="number" id="smsNumber" placeholder="+639XXXXXXXXX" required />
+    </label>
+    <label>Message
+      <textarea name="message" rows="3" maxlength="480" required></textarea>
+    </label>
+    <button class="btn" type="submit">Send (cost 1)</button>
+    <div id="smsStatus" class="hint"></div>
+  </form>
+
+  <h3>Credits</h3>
+  <div class="card">
+    <div class="hint">Complete reCAPTCHA and claim +3 credits.</div>
+    <div style="margin:8px 0;">
+      <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+      <div class="g-recaptcha" data-sitekey="{{ RECAPTCHA_SITE_KEY }}" data-callback="onRecaptchaSuccess"></div>
+    </div>
+    <button class="btn" id="claimCredits" disabled>Claim +3 credits</button>
+    <div id="creditStatus" class="hint"></div>
+  </div>
+
+  <h3>Recent Usage</h3>
+  <div class="list">
+    {% for log in logs %}
+      <div class="list-item">
+        <span class="mono">{{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</span>
+        <span>{{ log.endpoint }}</span>
+        <span class="mono">cost={{ log.cost }}</span>
+        <span class="badge {{ 'ok' if log.status=='success' else 'bad' }}">{{ log.status }}</span>
+      </div>
+    {% else %}
+      <div class="hint">No logs yet</div>
+    {% endfor %}
+  </div>
+
+  <script>
+    const form = document.getElementById('smsForm');
+    const statusEl = document.getElementById('smsStatus');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      statusEl.textContent = 'Sending...';
+      const data = Object.fromEntries(new FormData(form).entries());
+      // client-side normalize to +639XXXXXXXXX
+      const norm = (raw) => {
+        const s = String(raw || '').trim();
+        const digits = s.replace(/\D+/g, '');
+        if (digits.startsWith('63') && digits.length === 12 && digits[2] === '9') return '+' + digits;
+        if (digits.startsWith('09') && digits.length === 11) return '+63' + digits.slice(1);
+        if (digits.startsWith('9') && digits.length === 10) return '+63' + digits;
+        if (s.startsWith('+') && digits.startsWith('63') && digits.length === 12 && digits[2] === '9') return '+' + digits;
+        return s; // let server validate
+      };
+      data.number = norm(data.number);
+      try {
+        const res = await fetch('/api/send_sms', {method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data), credentials: 'same-origin'});
+        const j = await res.json();
+        if (res.ok) {
+          statusEl.textContent = 'Sent. Remaining credits: ' + j.remaining_credits;
+        } else if (res.status === 401) {
+          statusEl.textContent = 'Unauthorized. Please log in again.';
+        } else {
+          statusEl.textContent = 'Error: ' + (j.error || res.status);
+        }
+      } catch (err) {
+        statusEl.textContent = 'Network error.';
+      }
+    });
+
+    // ALTCHA integration
+    const creditStatus = document.getElementById('creditStatus');
+    const claimBtn = document.getElementById('claimCredits');
+    let recaptchaToken = null;
+
+    window.onRecaptchaSuccess = function(token) {
+      recaptchaToken = token;
+      claimBtn.disabled = !recaptchaToken;
+      creditStatus.textContent = 'CAPTCHA verified.';
+    };
+
+    claimBtn.addEventListener('click', async () => {
+      if (!recaptchaToken) { creditStatus.textContent = 'Please complete CAPTCHA first.'; return; }
+      creditStatus.textContent = 'Claiming...';
+      try {
+        const res = await fetch('/api/claim_credits', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recaptcha: recaptchaToken }), credentials: 'same-origin' });
+        const j = await res.json();
+        if (res.ok && j.ok) {
+          creditStatus.textContent = `+${j.added} credits. New balance: ${j.credits}`;
+          // Update visible credits value
+          const creditValueEls = document.querySelectorAll('.value');
+          creditValueEls.forEach(el => { if (/^\d+$/.test(el.textContent.trim())) { el.textContent = j.credits; } });
+          claimBtn.disabled = true;
+          try { grecaptcha.reset(); recaptchaToken = null; } catch(_){}
+        } else if (res.status === 401) {
+          creditStatus.textContent = 'Unauthorized. Please log in again.';
+        } else {
+          creditStatus.textContent = 'Captcha check failed.';
+        }
+      } catch (e) {
+        creditStatus.textContent = 'Network error.';
+      }
+    });
+  </script>
+{% endblock %}
+
+
