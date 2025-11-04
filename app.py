@@ -398,6 +398,24 @@ def docs():
     return render_template("docs.html")
 
 
+@app.get("/verify-wall")
+@login_required
+def verify_wall():
+    return render_template("verify_wall.html")
+
+
+@app.post("/api/claim_credits_wall")
+@login_required
+def claim_credits_wall():
+    db = SessionLocal()
+    try:
+        user = db.get(User, current_user.id)
+        user.credits += 3
+        db.commit()
+        return jsonify({"ok": True, "credits": user.credits, "added": 3})
+    finally:
+        db.close()
+
 @app.post("/api/claim_credits")
 @login_required
 def claim_credits():
