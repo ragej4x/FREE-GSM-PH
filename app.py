@@ -32,7 +32,11 @@ THEME = {
 # Database setup: prefer DATABASE_URL (e.g., Supabase Postgres), fallback to local SQLite
 db_url_env = os.getenv("DATABASE_URL", "").strip()
 if db_url_env:
-    DATABASE_URL = db_url_env
+    # Prefer psycopg (v3) driver for Postgres if not explicitly set
+    if db_url_env.startswith("postgresql://") and "+" not in db_url_env.split("://", 1)[0]:
+        DATABASE_URL = "postgresql+psycopg://" + db_url_env.split("://", 1)[1]
+    else:
+        DATABASE_URL = db_url_env
 else:
     DATABASE_URL = "sqlite:///app.db"
 
